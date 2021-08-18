@@ -2,32 +2,43 @@
 
 **Dependenies:**
 
-* Docker must be installed.
+* [Docker](https://docs.docker.com/get-docker/) must be installed.
+
+**Update Config File**
+
+Before you begin, update the [config](./config) file based on your GCP project settings and desired naming convensions. 
 
 **Initial GCP Setup:**
 ```
-cd ./gcp-data-streaming/
-
-# NOTE: Be sure to update the gcp_setup.sh file to set the GCP_PROJECT_ID to your GCP project id.
-
-./gcp_setup.sh
+01-setup.sh
 ```
 
-**To start the simulator:**
+**Build the containers (one for the simulator and the other for dataflow/beam)**
+
 ```
-cd ./gcp-data-streaming/simulator/
-
-./build.sh
-
-./run.sh
+./02-build-containers.sh
 ```
 
 **To start real-time Dataflow processing:**
+
+Run the following command to start the dataflow/beam processing engine. It will run in interactive mode (DirectRunner). All processed events will be written to the terminal so that results can be viewed in real-time.
+
 ```
-cd ./gcp-data-streaming/dataflow/
-
-./build.sh
-
-./run.sh
+./03-demo-start-dataflow.sh
 ```
 
+**To start the simulator:**
+
+In a new terminal, run the following command to start the simulated event stream:
+
+```
+./04-demo-start-simulated-event-stream.sh
+```
+
+---
+
+**Stop / shutdown all containers**
+
+```
+./stop-demo.sh
+```
