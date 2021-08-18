@@ -1,4 +1,4 @@
-# Google Cloud - Data Streaming
+# Game Telemetry Analysis
 
 **Dependenies:**
 
