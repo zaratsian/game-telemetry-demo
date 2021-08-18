@@ -1,0 +1,2 @@
+#apache-beam[gcp]
+apache-beam==2.29.0
