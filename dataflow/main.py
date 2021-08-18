@@ -25,6 +25,7 @@ python main.py \
 
 
 from __future__ import absolute_import
+import os
 import logging
 import argparse
 import json
@@ -40,15 +41,10 @@ from past.builtins import unicode
 
 ################################################################################################################
 #
-#   Variables
+#   Config
 #
 ################################################################################################################
 
-bq_schema = {'fields': [
-    {'name': 'uid',         'type': 'STRING', 'mode': 'NULLABLE'},
-    {'name': 'x_cord',      'type': 'INT64',  'mode': 'NULLABLE'},
-    {'name': 'y_cord',      'type': 'INT64',  'mode': 'NULLABLE'}
-]}
 
 ################################################################################################################
 #
@@ -61,7 +57,7 @@ def parse_pubsub(event):
 
 
 def preprocess_event(event):
-    return (event['name'], event['value'])
+    return ([event['player'],event['weapon']], event['kill'])
 
 
 def sum_by_group(GroupByKey_tuple):
@@ -71,7 +67,11 @@ def sum_by_group(GroupByKey_tuple):
 
 def avg_by_group(GroupByKey_tuple):
     (k,v) = GroupByKey_tuple
-    return {"name":k, "avg": (sum(v) / len(v)) }
+    return {"player":k[0], "weapon": k[1], "avg": (sum(v) / len(v)) }
+
+
+def print_event(event):
+    print('{}'.format(event))
 
 
 def run(argv=None):
@@ -86,7 +86,7 @@ def run(argv=None):
     parser.add_argument('--pubsub_topic',         required=True,    default='',                   help='Input PubSub Topic: projects/<project_id>/topics/<topic_name>')#parser.add_argument('--bq_dataset_name',      required=True,   default='',                   help='Output BigQuery Dataset')
     #parser.add_argument('--bq_table_name',       required=True,   default='',                    help='Output BigQuery Table')
     parser.add_argument('--runner',               required=True,    default='DirectRunner',       help='Dataflow Runner - DataflowRunner or DirectRunner (local)')
-    
+
     known_args, pipeline_args = parser.parse_known_args(argv)
     
     pipeline_args.extend([
@@ -101,6 +101,8 @@ def run(argv=None):
     pipeline_options.view_as(SetupOptions).save_main_session = True
     pipeline_options.view_as(StandardOptions).streaming = True
     
+    print('[ INFO ] GCP PROJECT ID: {}'.format(known_args.gcp_project))
+    os.environ['GOOGLE_CLOUD_PROJECT'] = known_args.gcp_project
     ###################################################################
     #   DataFlow Pipeline
     ###################################################################
@@ -121,13 +123,13 @@ def run(argv=None):
         # Tranform events
         event_window = (
             parsed_events | 'window' >> beam.Map(preprocess_event)
-                           | beam.WindowInto(window.SlidingWindows(30, 5)) # Window is 30 seconds in length, and a new window begins every five seconds
+                           | beam.WindowInto(window.SlidingWindows(60, 10)) # Window is 60 seconds in length, and a new window begins every 10 seconds
                            | beam.GroupByKey()
-                           | beam.Map(avg_by_group)
+                           | beam.Map(avg_by_group
         )
         
         # Print results to console (for testing/debugging)
-        event_window | 'print' >> beam.Map(print)
+        event_window | 'print event'   >> beam.Map(print_event)
         
         '''
         # Sink/Persist to BigQuery

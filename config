@@ -1,7 +1,6 @@
-GCP_PROJECT_ID="dz-apps"
+GCP_PROJECT_ID="zproject201807"
 
 GCS_DATAFLOW_BUCKET="gs://${GCP_PROJECT_ID}-game-events"
 
 PUBSUB_TOPIC="game-events"
-
 

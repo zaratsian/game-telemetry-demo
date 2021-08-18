@@ -8,8 +8,8 @@
 #
 ####################################################
 
-import sys
-import time
+import sys,os
+import datetime, time
 import socket
 import random
 import json
@@ -23,6 +23,8 @@ from google.cloud import pubsub_v1
 project_id   = os.environ['GCP_PROJECT_ID'] 
 pubsub_topic = os.environ['PUBSUB_TOPIC']
 
+print('[ GCP PROJECT ]:  {}'.format(project_id))
+print('[ pubsub_topic ]: {}'.format(pubsub_topic))
 
 game_types = [
     'Keyhunt',
@@ -56,6 +58,16 @@ weapons = [
     'Machine Gun',
     'Devastator',
     'Vortex'
+]
+
+usernames = [
+    'ScaryPumpkin',
+    'Scrapper',
+    'Shooter',
+    'SnakeEye',
+    'SunVolt',
+    'Swerve',
+    'SwiftFox'
 ]
 
 
@@ -100,20 +112,30 @@ def pubsub_callback( message_future ):
         print('[ INFO ] Result: {}'.format(message_future.result()))
 
 
+def push_to_pubsub(pubsub_publisher, project_id, pubsub_topic, json_paylod):
+    topic_path = pubsub_publisher.topic_path(project_id, pubsub_topic)
+    # Data must be a bytestring
+    data = json.dumps(json_paylod).encode('utf-8')
+    
+    future = pubsub_publisher.publish(topic_path, data)
+    print(future.result())
+    print(f"Published message to {topic_path}.")
+
+
 def simulate_payload(enable_sleep=True, sleep_duration=2):
     
     if enable_sleep:
         time.sleep(random.random()*sleep_duration)
     
     payload = {
-        'uid':          uid,
-        'game_id':      game_id,
-        'game_type':    game_type,
-        'game_map':     game_map,
-        'datetime':     event_datetime,
-        'player':       player,
-        'killed':       killed,
-        'weapon':       weapon,
+        'uid':          int(random.random()*1000000),
+        'game_id':      random.randint(1000,1050),
+        'game_type':    random.choice(game_types),
+        'game_map':     random.choice(game_maps),
+        'datetime':     datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"),
+        'player':       random.choice(usernames),
+        'kill':         random.randint(0,1),
+        'weapon':       random.choice(weapons),
         'x_coord':      random.randint(1,100),
         'y_coord':      random.randint(1,100),
         'z_coord':      random.randint(1,100)
@@ -130,9 +152,10 @@ def main():
     try:
         pubsub_publisher = pubsub_v1.PublisherClient()
         while True:
-            payload = simulate_payload()
-            print('[ INFO ] {}'.format(payload))
-            pubsub_publish(pubsub_publisher, project_id=project_id, pubsub_topic=pubsub_topic, message=payload)
+            json_paylod = simulate_payload()
+            print('[ INFO ] {}'.format(json_paylod))
+            push_to_pubsub(pubsub_publisher, project_id, pubsub_topic, json_paylod)
+            #pubsub_publish(pubsub_publisher, project_id=project_id, pubsub_topic=pubsub_topic, message=payload)
     except Exception as e:
         print('[ EXCEPTION ] {}'.format(e))
         sys.exit()
