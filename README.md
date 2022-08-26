@@ -10,7 +10,7 @@ Before you begin, update the [config](./config) file based on your GCP project s
 
 **Initial GCP Setup:**
 ```
-01-setup.sh
+./01-setup.sh
 ```
 
 **Build the containers (one for the simulator and the other for dataflow/beam)**
