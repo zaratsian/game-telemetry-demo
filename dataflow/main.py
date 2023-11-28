@@ -1,5 +1,3 @@
-
-
 ################################################################################################################
 #
 #   Google Cloud Dataflow
@@ -18,6 +16,38 @@ python main.py \
     --batch_size 10 \
     --pubsub_topic projects/dz-apps/topics/data-stream \
     --runner DirectRunner
+
+python3 main.py \
+    --gcp_project $GCP_PROJECT_ID \
+    --region $GCP_REGION \
+    --job_name game-telemetry \
+    --gcp_staging_location $GCS_DATAFLOW_BUCKET/staging \
+    --gcp_tmp_location $GCS_DATAFLOW_BUCKET/tmp \
+    --batch_size 10 \
+    --pubsub_topic "projects/$GCP_PROJECT_ID/topics/$PUBSUB_TOPIC" \
+    --bq_dataset_name "dataflow_test" \
+    --bq_table_name "test_table" \
+    --runner DirectRunner
+
+
+# Example payload to send to PubSub Topic
+{
+    "eventid": "eventid_123",
+    "eventtype": "spawn",
+    "timestamp": 1701177119,
+    "playerid": "player1001",
+    "label": "no label",
+    "xcoord": 1.1,
+    "ycoord": 2.2,
+    "zcoord": 3.3,
+    "dow": 4,
+    "hour": 12,
+    "score": 33,
+    "minutesplayed": 30,
+    "timeinstore": 15,
+    "ml": "",
+}
+
 
 '''
 #
@@ -41,10 +71,26 @@ from past.builtins import unicode
 
 ################################################################################################################
 #
-#   Config
+#   BQ Schema
 #
 ################################################################################################################
 
+bq_schema = {'fields': [
+    {'name': "eventid", 'type': 'STRING', 'mode': 'NULLABLE'},
+    {'name': "eventtype", 'type': 'STRING', 'mode': 'NULLABLE'},
+    {'name': "timestamp", 'type': 'INTEGER', 'mode': 'NULLABLE'},
+    {'name': "playerid", 'type': 'STRING', 'mode': 'NULLABLE'},
+    {'name': "label", 'type': 'STRING', 'mode': 'NULLABLE'},
+    {'name': "xcoord", 'type': 'FLOAT', 'mode': 'NULLABLE'},
+    {'name': "ycoord", 'type': 'FLOAT', 'mode': 'NULLABLE'},
+    {'name': "zcoord", 'type': 'FLOAT', 'mode': 'NULLABLE'},
+    {'name': "dow", 'type': 'INTEGER', 'mode': 'NULLABLE'},
+    {'name': "hour", 'type': 'INTEGER', 'mode': 'NULLABLE'},
+    {'name': "score", 'type': 'FLOAT', 'mode': 'NULLABLE'},
+    {'name': "minutesplayed", 'type': 'FLOAT', 'mode': 'NULLABLE'},
+    {'name': "timeinstore", 'type': 'FLOAT', 'mode': 'NULLABLE'},
+    {'name': "ml", 'type': 'STRING', 'mode': 'NULLABLE'},
+]}
 
 ################################################################################################################
 #
@@ -57,7 +103,7 @@ def parse_pubsub(event):
 
 
 def preprocess_event(event):
-    return ([event['player'],event['weapon']], event['kill'])
+    return ([event['playerid'],event['label']], event['minutesplayed'])
 
 
 def sum_by_group(GroupByKey_tuple):
@@ -67,7 +113,7 @@ def sum_by_group(GroupByKey_tuple):
 
 def avg_by_group(GroupByKey_tuple):
     (k,v) = GroupByKey_tuple
-    return {"player":k[0], "weapon": k[1], "avg": (sum(v) / len(v)) }
+    return {"playerid":k[0], "label": k[1], "avgMinutesPlayed": (sum(v) / len(v)) }
 
 
 def print_event(event):
@@ -84,7 +130,8 @@ def run(argv=None):
     parser.add_argument('--gcp_tmp_location',     required=True,    default='gs://xxxxx/tmp',     help='Dataflow tmp GCS location')
     parser.add_argument('--batch_size',           required=True,    default=10,                   help='Dataflow Batch Size')
     parser.add_argument('--pubsub_topic',         required=True,    default='',                   help='Input PubSub Topic: projects/<project_id>/topics/<topic_name>')#parser.add_argument('--bq_dataset_name',      required=True,   default='',                   help='Output BigQuery Dataset')
-    #parser.add_argument('--bq_table_name',       required=True,   default='',                    help='Output BigQuery Table')
+    parser.add_argument('--bq_dataset_name',      required=True,    default='',                   help='BigQuery Dataset, used as data sink')
+    parser.add_argument('--bq_table_name',        required=True,    default='',                   help='BigQuery Table, used as data sink')
     parser.add_argument('--runner',               required=True,    default='DirectRunner',       help='Dataflow Runner - DataflowRunner or DirectRunner (local)')
 
     known_args, pipeline_args = parser.parse_known_args(argv)
@@ -120,28 +167,28 @@ def run(argv=None):
             events  | 'parsed events' >> beam.Map(parse_pubsub)
         )
         
-        # Tranform events
+        # Event Window Transform
+        '''
         event_window = (
             parsed_events | 'window' >> beam.Map(preprocess_event)
                            | beam.WindowInto(window.SlidingWindows(60, 10)) # Window is 60 seconds in length, and a new window begins every 10 seconds
                            | beam.GroupByKey()
-                           | beam.Map(avg_by_group
+                           | beam.Map(avg_by_group)
         )
+        '''
         
         # Print results to console (for testing/debugging)
-        event_window | 'print event'   >> beam.Map(print_event)
+        parsed_events | 'print event'   >> beam.Map(print_event)
         
-        '''
         # Sink/Persist to BigQuery
-        parsed | 'Write to bq' >> beam.io.gcp.bigquery.WriteToBigQuery(
-                        table=known_args.bq_table_name,
-                        dataset=known_args.bq_dataset_name,
+        parsed_events | 'Write to bq' >> beam.io.gcp.bigquery.WriteToBigQuery(
                         project=known_args.gcp_project,
+                        dataset=known_args.bq_dataset_name,
+                        table=known_args.bq_table_name,
                         schema=bq_schema,
                         batch_size=int(known_args.batch_size)
                         )
-        '''
-        
+
         # Sink data to PubSub
         #output | beam.io.WriteToPubSub(known_args.output_topic)
 
@@ -156,7 +203,3 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     run()
 
-
-
-
-#ZEND
